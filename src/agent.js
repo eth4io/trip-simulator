@@ -274,12 +274,20 @@ Agent.prototype.gps = function(coordinate) {
 
 // select starting location
 Agent.prototype.place = async function() {
-  // pick a quadkey
-  const quadkey = this.simulation.chance.weighted(
-    this.simulation.quadranks,
-    this.simulation.quadscores
-  );
-  const bbox = tilebelt.tileToBBOX(tilebelt.quadkeyToTile(quadkey));
+  if (this.simulation.odBoundsFile) {
+    const bbox = this.simulation.chance.weighted(
+      this.simulation.odBounds,
+      this.simulation.odScores
+    );
+  }
+  else {
+    // pick a quadkey
+    const quadkey = this.simulation.chance.weighted(
+      this.simulation.quadranks,
+      this.simulation.quadscores
+    );
+    const bbox = tilebelt.tileToBBOX(tilebelt.quadkeyToTile(quadkey));
+  }
 
   // select random point within bbox
   const pt = [

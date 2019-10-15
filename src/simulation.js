@@ -8,6 +8,7 @@ const OSRM = require("osrm");
 const Chance = require("chance");
 const Agent = require("./agent");
 const Status = require("./status");
+const csv = require('fast-csv');
 
 const ZOOM = 18;
 const Z = { min_zoom: ZOOM, max_zoom: ZOOM };
@@ -22,6 +23,9 @@ var Simulation = function(opts, config) {
   this.quadtree = new Map();
   this.quadranks = [];
   this.quadscores = [];
+  this.odBoundsFile = opts.odBoundsFile;
+  this.odBounds = [];
+  this.odScores = [];
   this.chance = new Chance();
   this.Z = Z;
   this.agents = [];
@@ -34,6 +38,16 @@ var Simulation = function(opts, config) {
 Simulation.prototype.setup = async function() {
   return new Promise((resolve, reject) => {
     var parse = parser();
+
+    if (this.odBoundsFile) {
+      fs.createReadStream(this.odBoundsFile)
+        .pipe(csv.parse({headers: true}))
+        .on("data", row => {
+          this.odBounds.push([row['minx'], row['maxx'], row['miny'], row['maxx']])
+          this.odScores.push(row['probability'])
+        });
+    }
+
 
     // build node store
     fs.createReadStream(this.pbf)
