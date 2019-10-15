@@ -39,32 +39,71 @@ Simulation.prototype.setup = async function() {
   return new Promise((resolve, reject) => {
     var parse = parser();
 
-    // build node store
-    fs.createReadStream(this.pbf)
-      .pipe(parse)
-      .pipe(
-        through2.obj((items, enc, next) => {
-          items.forEach(item => {
-            if (item.type === "node") {
-              this.nodes.set(item.id, [item.lon, item.lat]);
-            }
-          });
-          next();
+    if (this.odBoundsFile) {
+      fs.createReadStream(this.odBoundsFile)
+        .pipe(csv.parse({headers: true}))
+        .on("data", row => {
+          this.odBounds.push([row['minx'], row['miny'], row['maxx'], row['maxy']]);
+          this.odScores.push(row['Persons']);
         })
-      )
-      .on("finish", () => {
-        parse = parser();
-        fs.createReadStream(this.pbf)
-          .pipe(parse)
-          .pipe(
-            through2.obj((items, enc, next) => {
-              items.forEach(item => {
-                if (item.type === "node") {
-                  // node
-                  if (Object.keys(item.tags).length && item.tags.amenity) {
-                    // interesting node
+        .on("finish", () => {
+        resolve();
+      });
+    }
+    else {
+      // build node store
+      fs.createReadStream(this.pbf)
+        .pipe(parse)
+        .pipe(
+          through2.obj((items, enc, next) => {
+            items.forEach(item => {
+              if (item.type === "node") {
+                this.nodes.set(item.id, [item.lon, item.lat]);
+              }
+            });
+            next();
+          })
+        )
+        .on("finish", () => {
+          parse = parser();
+          fs.createReadStream(this.pbf)
+            .pipe(parse)
+            .pipe(
+              through2.obj((items, enc, next) => {
+                items.forEach(item => {
+                  if (item.type === "node") {
+                    // node
+                    if (Object.keys(item.tags).length && item.tags.amenity) {
+                      // interesting node
+                      var score = Object.keys(item.tags).length;
+                      var geom = turf.point(this.nodes.get(item.id)).geometry;
+                      var quadkeys = cover.indexes(geom, Z);
+                      for (let quadkey of quadkeys) {
+                        var cell = this.quadtree.get(quadkey);
+                        if (!cell) {
+                          cell = score;
+                        } else {
+                          cell += score;
+                        }
+                        this.quadtree.set(quadkey, cell);
+                      }
+                    }
+                  } else if (
+                    item.type === "way" &&
+                    item.refs.length >= 2 &&
+                    (item.tags.building ||
+                    item.tags.amenity ||
+                    item.tags.highway === "residential")
+                  ) {
+                    // way
                     var score = Object.keys(item.tags).length;
-                    var geom = turf.point(this.nodes.get(item.id)).geometry;
+                    // residential roads included, but given reduced weight
+                    if (item.tags.highway) score = score * 0.1;
+                    var geom = turf.lineString(
+                      item.refs.map(ref => {
+                        return this.nodes.get(ref);
+                      })
+                    ).geometry;
                     var quadkeys = cover.indexes(geom, Z);
                     for (let quadkey of quadkeys) {
                       var cell = this.quadtree.get(quadkey);
@@ -76,61 +115,26 @@ Simulation.prototype.setup = async function() {
                       this.quadtree.set(quadkey, cell);
                     }
                   }
-                } else if (
-                  item.type === "way" &&
-                  item.refs.length >= 2 &&
-                  (item.tags.building ||
-                    item.tags.amenity ||
-                    item.tags.highway === "residential")
-                ) {
-                  // way
-                  var score = Object.keys(item.tags).length;
-                  // residential roads included, but given reduced weight
-                  if (item.tags.highway) score = score * 0.1;
-                  var geom = turf.lineString(
-                    item.refs.map(ref => {
-                      return this.nodes.get(ref);
-                    })
-                  ).geometry;
-                  var quadkeys = cover.indexes(geom, Z);
-                  for (let quadkey of quadkeys) {
-                    var cell = this.quadtree.get(quadkey);
-                    if (!cell) {
-                      cell = score;
-                    } else {
-                      cell += score;
-                    }
-                    this.quadtree.set(quadkey, cell);
-                  }
-                }
+                });
+                next();
+              })
+            )
+            .on("finish", () => {
+              // rank quadkeys
+              this.quadtree.forEach((value, key) => {
+                this.quadranks.push(key);
               });
-              next();
-            })
-          )
-          .on("finish", () => {
-            // rank quadkeys
-            this.quadtree.forEach((value, key) => {
-              this.quadranks.push(key);
-            });
-            this.quadranks.sort((a, b) => {
-              return this.quadtree.get(a) - this.quadtree.get(b);
-            });
-            this.quadranks.forEach(q => {
-              this.quadscores.push(this.quadtree.get(q));
-            });
+              this.quadranks.sort((a, b) => {
+                return this.quadtree.get(a) - this.quadtree.get(b);
+              });
+              this.quadranks.forEach(q => {
+                this.quadscores.push(this.quadtree.get(q));
+              });
 
-            if (this.odBoundsFile) {
-              fs.createReadStream(this.odBoundsFile)
-                .pipe(csv.parse({headers: true}))
-                .on("data", row => {
-                  this.odBounds.push([row['minx'], row['miny'], row['maxx'], row['maxy']]);
-                  this.odScores.push(row['probability']);
-                }).on("finish", () => {
-                resolve();
-              });
-            }
-          });
-      });
+              resolve();
+            });
+        });
+    }
   });
 };
 
