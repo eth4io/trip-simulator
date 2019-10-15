@@ -44,7 +44,7 @@ Simulation.prototype.setup = async function() {
         .pipe(csv.parse({headers: true}))
         .on("data", row => {
           this.odBounds.push([row['minx'], row['miny'], row['maxx'], row['maxy']]);
-          this.odScores.push(row['Persons']);
+          this.odScores.push(row['probability']);
         })
         .on("finish", () => {
         resolve();
