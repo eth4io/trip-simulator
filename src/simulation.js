@@ -39,16 +39,6 @@ Simulation.prototype.setup = async function() {
   return new Promise((resolve, reject) => {
     var parse = parser();
 
-    if (this.odBoundsFile) {
-      fs.createReadStream(this.odBoundsFile)
-        .pipe(csv.parse({headers: true}))
-        .on("data", row => {
-          this.odBounds.push([row['minx'], row['maxx'], row['miny'], row['maxx']])
-          this.odScores.push(row['probability'])
-        });
-    }
-
-
     // build node store
     fs.createReadStream(this.pbf)
       .pipe(parse)
@@ -129,7 +119,16 @@ Simulation.prototype.setup = async function() {
               this.quadscores.push(this.quadtree.get(q));
             });
 
-            resolve();
+            if (this.odBoundsFile) {
+              fs.createReadStream(this.odBoundsFile)
+                .pipe(csv.parse({headers: true}))
+                .on("data", row => {
+                  this.odBounds.push([row['minx'], row['miny'], row['maxx'], row['maxy']]);
+                  this.odScores.push(row['probability']);
+                }).on("finish", () => {
+                resolve();
+              });
+            }
           });
       });
   });

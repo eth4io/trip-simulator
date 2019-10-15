@@ -274,8 +274,9 @@ Agent.prototype.gps = function(coordinate) {
 
 // select starting location
 Agent.prototype.place = async function() {
+  var bbox;
   if (this.simulation.odBoundsFile) {
-    const bbox = this.simulation.chance.weighted(
+    bbox = this.simulation.chance.weighted(
       this.simulation.odBounds,
       this.simulation.odScores
     );
@@ -286,7 +287,7 @@ Agent.prototype.place = async function() {
       this.simulation.quadranks,
       this.simulation.quadscores
     );
-    const bbox = tilebelt.tileToBBOX(tilebelt.quadkeyToTile(quadkey));
+    bbox = tilebelt.tileToBBOX(tilebelt.quadkeyToTile(quadkey));
   }
 
   // select random point within bbox
@@ -304,17 +305,28 @@ Agent.prototype.place = async function() {
 Agent.prototype.route = async function(range) {
   try {
     // buffer location to range
+    var bbox;
     const buffer = turf.buffer(turf.point(this.location), range).geometry;
-    // compute quadkeys to query
-    const quadkeys = cover.indexes(buffer, this.simulation.Z);
-    // select random quadkey by rank
-    const scores = quadkeys.map(q => {
-      var score = this.simulation.quadtree.get(q);
-      return this.simulation.quadtree.get(q) || 0;
-    });
 
-    const quadkey = this.simulation.chance.weighted(quadkeys, scores);
-    const bbox = tilebelt.tileToBBOX(tilebelt.quadkeyToTile(quadkey));
+    if (this.simulation.odBoundsFile) {
+      bbox = this.simulation.chance.weighted(
+        this.simulation.odBounds,
+        this.simulation.odScores
+      );
+    }
+    else {
+      // compute quadkeys to query
+      const quadkeys = cover.indexes(buffer, this.simulation.Z);
+      // select random quadkey by rank
+      const scores = quadkeys.map(q => {
+        var score = this.simulation.quadtree.get(q);
+        return this.simulation.quadtree.get(q) || 0;
+      });
+
+      const quadkey = this.simulation.chance.weighted(quadkeys, scores);
+      bbox = tilebelt.tileToBBOX(tilebelt.quadkeyToTile(quadkey));
+    }
+
     // select random destination within bbox
     var destination = [
       this.simulation.chance.longitude({ min: bbox[0], max: bbox[2] }),
