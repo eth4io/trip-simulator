@@ -43,11 +43,12 @@ Simulation.prototype.setup = async function() {
       fs.createReadStream(this.odBoundsFile)
         .pipe(csv.parse({headers: true}))
         .on("data", row => {
-          this.odBounds.push([row['minx'], row['miny'], row['maxx'], row['maxy']]);
-          this.odScores.push(row['probability']);
+          this.odBounds.push([row['minx'], row['miny'], row['maxx'], row['maxy'],
+            row['SA2_NAME_2016'], row['probability']]);
+          this.odScores.push(row['probability'] * 100000);
         })
         .on("finish", () => {
-        resolve();
+          resolve();
       });
     }
     else {
