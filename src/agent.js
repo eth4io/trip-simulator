@@ -354,7 +354,10 @@ Agent.prototype.route = async function(range) {
             this.path.line.geometry.coordinates.map(c => {
               return this.gps(c);
             }),
-            { d: this.path.distance }
+            { origin_time: this.start,
+              destination_time: this.next,
+              distance: this.path.distance,
+              duration: this.path.duration }
           )
         ) + "\n"
       );
