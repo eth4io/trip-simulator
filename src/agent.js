@@ -336,11 +336,10 @@ Agent.prototype.route = async function(range) {
     destination = await this.simulation.snap(destination);
     // route from location to destination
     this.path = await this.simulation.route(this.location, destination);
-    this.path.duration = this.path.duration * this.speed * 1000;
     this.path.line = turf.lineString(this.path.geometry.coordinates);
     this.path.distance = turf.length(this.path.line);
     this.start = this.simulation.time;
-    this.next = this.simulation.time + this.path.duration;
+    this.next = this.simulation.time + this.path.duration * 1000;
 
     if (this.path.distance === 0) {
       return await this.route(range * 1.5);
