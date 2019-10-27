@@ -60,7 +60,7 @@ Simulation.prototype.setup = async function() {
             .on("data", row => {
               row_data = [];
               for (cell in this.odCells) {
-                row_data.push(row[this.odCells[cell]]);
+                row_data.push(row[this.odCells[cell]] * 1000);
               }
               this.od2DCells.set(row['cell_id'], row_data);
             })

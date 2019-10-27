@@ -5,6 +5,7 @@ const cover = require("@mapbox/tile-cover");
 const Status = require("./status");
 
 var Agent = function(simulation, opts, config) {
+  this.S2 = require('s2-geometry').S2;
   this.probes = opts.probes;
   this.traces = opts.traces;
   this.trips = opts.trips;
@@ -276,13 +277,12 @@ Agent.prototype.gps = function(coordinate) {
 Agent.prototype.place = async function() {
   var bbox;
   if (this.simulation.odCellsFile) {
-    var S2 = require('s2-geometry').S2;
     cellId = this.simulation.chance.weighted(
       this.simulation.odCells,
       this.simulation.odCellsOriginScores
     );
 
-    var latLng = S2.idToLatLng(cellId);
+    var latLng = this.S2.idToLatLng(cellId);
     bbox = [
       latLng['lng'] - this.simulation.s2_x_offset, latLng['lat'] - this.simulation.s2_y_offset,
       latLng['lng'] + this.simulation.s2_x_offset, latLng['lat'] + this.simulation.s2_y_offset
@@ -320,21 +320,50 @@ Agent.prototype.route = async function(range) {
     const buffer = turf.buffer(turf.point(this.location), range).geometry;
 
     if (this.simulation.odCellsFile) {
-      var S2 = require('s2-geometry').S2;
 
-      currentS2CellId = S2.S2Cell.keyToId(S2.S2Cell.latLngToKey(this.location[1], this.location[0],
-        this.simulation.s2Level));
-
-      cellId = this.simulation.chance.weighted(
-        this.simulation.odCells,
-        this.simulation.od2DCells.get(currentS2CellId)
+      currentS2CellId = this.S2.S2Cell.keyToId(
+        this.S2.S2Cell.latLngToKey(this.location[1], this.location[0],
+          this.simulation.s2Level)
       );
 
-      var latLng = S2.idToLatLng(cellId);
-      bbox = [
-        latLng['lng'] - this.simulation.s2_x_offset, latLng['lat'] - this.simulation.s2_y_offset,
-        latLng['lng'] + this.simulation.s2_x_offset, latLng['lat'] + this.simulation.s2_y_offset
-      ];
+      if (this.simulation.odCells.includes(currentS2CellId)) {
+        ranks = this.simulation.od2DCells.get(currentS2CellId);
+        if ((ranks.reduce((a, b) => a + b, 0) === 0)) {
+          cellId = this.simulation.chance.weighted(
+            this.simulation.odCells,
+            this.simulation.odCellsOriginScores
+          );
+
+          var latLng = this.S2.idToLatLng(cellId);
+          bbox = [
+            latLng['lng'] - this.simulation.s2_x_offset, latLng['lat'] - this.simulation.s2_y_offset,
+            latLng['lng'] + this.simulation.s2_x_offset, latLng['lat'] + this.simulation.s2_y_offset
+          ];
+        }
+        else {
+          cellId = this.simulation.chance.weighted(
+            this.simulation.odCells,
+            ranks
+          );
+
+          var latLng = this.S2.idToLatLng(cellId);
+          bbox = [
+            latLng['lng'] - this.simulation.s2_x_offset, latLng['lat'] - this.simulation.s2_y_offset,
+            latLng['lng'] + this.simulation.s2_x_offset, latLng['lat'] + this.simulation.s2_y_offset
+          ];
+        }
+      } else {
+        cellId = this.simulation.chance.weighted(
+          this.simulation.odCells,
+          this.simulation.odCellsOriginScores
+        );
+
+        var latLng = this.S2.idToLatLng(cellId);
+        bbox = [
+          latLng['lng'] - this.simulation.s2_x_offset, latLng['lat'] - this.simulation.s2_y_offset,
+          latLng['lng'] + this.simulation.s2_x_offset, latLng['lat'] + this.simulation.s2_y_offset
+        ];
+      }
     } else if(this.simulation.odBoundsFile) {
       bbox = this.simulation.chance.weighted(
         this.simulation.odBounds,
