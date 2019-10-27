@@ -275,13 +275,24 @@ Agent.prototype.gps = function(coordinate) {
 // select starting location
 Agent.prototype.place = async function() {
   var bbox;
-  if (this.simulation.odBoundsFile) {
+  if (this.simulation.odCellsFile) {
+    var S2 = require('s2-geometry').S2;
+    cellId = this.simulation.chance.weighted(
+      this.simulation.odCells,
+      this.simulation.odCellsOriginScores
+    );
+
+    var latLng = S2.idToLatLng(cellId);
+    bbox = [
+      latLng['lng'] - this.simulation.s2_x_offset, latLng['lat'] - this.simulation.s2_y_offset,
+      latLng['lng'] + this.simulation.s2_x_offset, latLng['lat'] + this.simulation.s2_y_offset
+    ];
+  } else if(this.simulation.odBoundsFile) {
     bbox = this.simulation.chance.weighted(
       this.simulation.odBounds,
       this.simulation.odScores
     );
-  }
-  else {
+  } else {
     // pick a quadkey
     const quadkey = this.simulation.chance.weighted(
       this.simulation.quadranks,
@@ -308,13 +319,28 @@ Agent.prototype.route = async function(range) {
     var bbox;
     const buffer = turf.buffer(turf.point(this.location), range).geometry;
 
-    if (this.simulation.odBoundsFile) {
+    if (this.simulation.odCellsFile) {
+      var S2 = require('s2-geometry').S2;
+
+      currentS2CellId = S2.S2Cell.keyToId(S2.S2Cell.latLngToKey(this.location[1], this.location[0],
+        this.simulation.s2Level));
+
+      cellId = this.simulation.chance.weighted(
+        this.simulation.odCells,
+        this.simulation.od2DCells.get(currentS2CellId)
+      );
+
+      var latLng = S2.idToLatLng(cellId);
+      bbox = [
+        latLng['lng'] - this.simulation.s2_x_offset, latLng['lat'] - this.simulation.s2_y_offset,
+        latLng['lng'] + this.simulation.s2_x_offset, latLng['lat'] + this.simulation.s2_y_offset
+      ];
+    } else if(this.simulation.odBoundsFile) {
       bbox = this.simulation.chance.weighted(
         this.simulation.odBounds,
         this.simulation.odScores
       );
-    }
-    else {
+    } else {
       // compute quadkeys to query
       const quadkeys = cover.indexes(buffer, this.simulation.Z);
       // select random quadkey by rank

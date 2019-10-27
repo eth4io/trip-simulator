@@ -9,8 +9,6 @@ const Chance = require("chance");
 const Agent = require("./agent");
 const Status = require("./status");
 const csv = require('fast-csv');
-const s2 = require('s2-geometry').S2;
-const s2Level = 10;
 
 const ZOOM = 18;
 const Z = { min_zoom: ZOOM, max_zoom: ZOOM };
@@ -39,6 +37,9 @@ var Simulation = function(opts, config) {
   while (spawn--) {
     this.agents.push(new Agent(this, opts, config));
   }
+  this.s2Level = 10;
+  this.s2_x_offset = 0.04397;
+  this.s2_y_offset = 0.05212;
 };
 
 Simulation.prototype.setup = async function() {
@@ -62,7 +63,6 @@ Simulation.prototype.setup = async function() {
                 row_data.push(row[this.odCells[cell]]);
               }
               this.od2DCells.set(row['cell_id'], row_data);
-              console.log(this.od2DCells.get(row['cell_id']));
             })
             .on("finish", () => {
               resolve();
