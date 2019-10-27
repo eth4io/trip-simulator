@@ -9,6 +9,8 @@ const Chance = require("chance");
 const Agent = require("./agent");
 const Status = require("./status");
 const csv = require('fast-csv');
+const s2 = require('s2-geometry').S2;
+const s2Level = 10;
 
 const ZOOM = 18;
 const Z = { min_zoom: ZOOM, max_zoom: ZOOM };
@@ -26,6 +28,10 @@ var Simulation = function(opts, config) {
   this.odBoundsFile = opts.odBoundsFile;
   this.odBounds = [];
   this.odScores = [];
+  this.odCellsFile = opts.odCellsFile;
+  this.odCellsOriginScores = [];
+  this.odCells = [];
+  this.od2DCells = new Map();
   this.chance = new Chance();
   this.Z = Z;
   this.agents = [];
@@ -39,7 +45,31 @@ Simulation.prototype.setup = async function() {
   return new Promise((resolve, reject) => {
     var parse = parser();
 
-    if (this.odBoundsFile) {
+    if (this.odCellsFile) {
+      fs.createReadStream(this.odCellsFile)
+        .pipe(csv.parse({headers: true}))
+        .on("data", row => {
+          this.odCells.push(row['cell_id']);
+          this.odCellsOriginScores.push(row['origin'] * 1000);
+        })
+        .on("finish", () => {
+          var k = 0;
+          fs.createReadStream(this.odCellsFile)
+            .pipe(csv.parse({headers: true}))
+            .on("data", row => {
+              row_data = [];
+              for (cell in this.odCells) {
+                row_data.push(row[this.odCells[cell]]);
+              }
+              this.od2DCells.set(row['cell_id'], row_data);
+              console.log(this.od2DCells.get(row['cell_id']));
+            })
+            .on("finish", () => {
+              resolve();
+            });
+      });
+    }
+    else if (this.odBoundsFile) {
       fs.createReadStream(this.odBoundsFile)
         .pipe(csv.parse({headers: true}))
         .on("data", row => {
