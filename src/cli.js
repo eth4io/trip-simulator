@@ -20,6 +20,7 @@ if (argv.help || argv.h || Object.keys(argv).length === 1) {
   help += "--trips       MDS trips output file\n";
   help += "--changes     MDS status changes output file\n";
   help += "--odBounds    custom OD bounds file\n";
+  help += "--odCells     custom OD cells file\n";
 
   console.log(help);
   process.exit(0);
@@ -48,6 +49,8 @@ const trips = argv.trips;
 const changes = argv.changes;
 if (argv.odBounds)
   var odBoundsFile = path.join(__dirname, "..", argv.odBounds);
+if (argv.odCells)
+  var odCellsFile = path.join(__dirname, "..", argv.odCells);
 
 var opts = {
   probes: probes,
@@ -58,7 +61,8 @@ var opts = {
   graph: graph,
   agents: agents,
   start: start,
-  odBoundsFile: odBoundsFile
+  odBoundsFile: odBoundsFile,
+  odCellsFile: odCellsFile
 };
 
 var message = "";
