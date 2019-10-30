@@ -19,6 +19,8 @@ if (argv.help || argv.h || Object.keys(argv).length === 1) {
   help += "--traces      GeoJSON traces output file\n";
   help += "--trips       MDS trips output file\n";
   help += "--changes     MDS status changes output file\n";
+  help += "--odBounds    custom OD bounds file\n";
+  help += "--odCells     custom OD cells file\n";
 
   console.log(help);
   process.exit(0);
@@ -39,12 +41,16 @@ const quiet = argv.quiet || argv.q;
 const pbf = argv.pbf;
 const graph = argv.graph;
 const agents = +argv.agents;
-const start = +argv.seconds;
+const start = +argv.start;
 const seconds = +argv.seconds;
 const probes = argv.probes;
 const traces = argv.traces;
 const trips = argv.trips;
 const changes = argv.changes;
+if (argv.odBounds)
+  var odBoundsFile = path.join(__dirname, "..", argv.odBounds);
+if (argv.odCells)
+  var odCellsFile = path.join(__dirname, "..", argv.odCells);
 
 var opts = {
   probes: probes,
@@ -54,7 +60,9 @@ var opts = {
   pbf: pbf,
   graph: graph,
   agents: agents,
-  start: start
+  start: start,
+  odBoundsFile: odBoundsFile,
+  odCellsFile: odCellsFile
 };
 
 var message = "";

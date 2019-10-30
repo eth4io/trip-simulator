@@ -15,11 +15,13 @@
     "@turf/turf": "^5.1.6",
     "byline": "^5.0.0",
     "chance": "^1.0.18",
+    "fast-csv": "^3.4.0",
     "minimist": "^1.2.0",
     "moment": "^2.24.0",
     "osm-pbf-parser": "^2.3.0",
     "osrm": "^5.22.0",
     "random": "^2.0.13",
+    "s2-geometry": "^1.2.10",
     "through2": "^3.0.1"
   },
   "devDependencies": {

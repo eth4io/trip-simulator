@@ -8,6 +8,7 @@ const OSRM = require("osrm");
 const Chance = require("chance");
 const Agent = require("./agent");
 const Status = require("./status");
+const csv = require('fast-csv');
 
 const ZOOM = 18;
 const Z = { min_zoom: ZOOM, max_zoom: ZOOM };
@@ -22,6 +23,13 @@ var Simulation = function(opts, config) {
   this.quadtree = new Map();
   this.quadranks = [];
   this.quadscores = [];
+  this.odBoundsFile = opts.odBoundsFile;
+  this.odBounds = [];
+  this.odScores = [];
+  this.odCellsFile = opts.odCellsFile;
+  this.odCellsOriginScores = [];
+  this.odCells = [];
+  this.od2DCells = new Map();
   this.chance = new Chance();
   this.Z = Z;
   this.agents = [];
@@ -29,38 +37,104 @@ var Simulation = function(opts, config) {
   while (spawn--) {
     this.agents.push(new Agent(this, opts, config));
   }
+  this.s2Level = 10;
+  this.s2_x_offset = 0.04397;
+  this.s2_y_offset = 0.05212;
 };
 
 Simulation.prototype.setup = async function() {
   return new Promise((resolve, reject) => {
     var parse = parser();
 
-    // build node store
-    fs.createReadStream(this.pbf)
-      .pipe(parse)
-      .pipe(
-        through2.obj((items, enc, next) => {
-          items.forEach(item => {
-            if (item.type === "node") {
-              this.nodes.set(item.id, [item.lon, item.lat]);
-            }
-          });
-          next();
+    if (this.odCellsFile) {
+      fs.createReadStream(this.odCellsFile)
+        .pipe(csv.parse({headers: true}))
+        .on("data", row => {
+          this.odCells.push(row['cell_id']);
+          this.odCellsOriginScores.push(row['origin'] * 1000);
         })
-      )
-      .on("finish", () => {
-        parse = parser();
-        fs.createReadStream(this.pbf)
-          .pipe(parse)
-          .pipe(
-            through2.obj((items, enc, next) => {
-              items.forEach(item => {
-                if (item.type === "node") {
-                  // node
-                  if (Object.keys(item.tags).length && item.tags.amenity) {
-                    // interesting node
+        .on("finish", () => {
+          var k = 0;
+          fs.createReadStream(this.odCellsFile)
+            .pipe(csv.parse({headers: true}))
+            .on("data", row => {
+              row_data = [];
+              for (cell in this.odCells) {
+                row_data.push(row[this.odCells[cell]] * 1000);
+              }
+              this.od2DCells.set(row['cell_id'], row_data);
+            })
+            .on("finish", () => {
+              resolve();
+            });
+      });
+    }
+    else if (this.odBoundsFile) {
+      fs.createReadStream(this.odBoundsFile)
+        .pipe(csv.parse({headers: true}))
+        .on("data", row => {
+          this.odBounds.push([row['minx'], row['miny'], row['maxx'], row['maxy'],
+            row['SA2_NAME_2016'], row['probability']]);
+          this.odScores.push(row['probability'] * 100000);
+        })
+        .on("finish", () => {
+          resolve();
+      });
+    }
+    else {
+      // build node store
+      fs.createReadStream(this.pbf)
+        .pipe(parse)
+        .pipe(
+          through2.obj((items, enc, next) => {
+            items.forEach(item => {
+              if (item.type === "node") {
+                this.nodes.set(item.id, [item.lon, item.lat]);
+              }
+            });
+            next();
+          })
+        )
+        .on("finish", () => {
+          parse = parser();
+          fs.createReadStream(this.pbf)
+            .pipe(parse)
+            .pipe(
+              through2.obj((items, enc, next) => {
+                items.forEach(item => {
+                  if (item.type === "node") {
+                    // node
+                    if (Object.keys(item.tags).length && item.tags.amenity) {
+                      // interesting node
+                      var score = Object.keys(item.tags).length;
+                      var geom = turf.point(this.nodes.get(item.id)).geometry;
+                      var quadkeys = cover.indexes(geom, Z);
+                      for (let quadkey of quadkeys) {
+                        var cell = this.quadtree.get(quadkey);
+                        if (!cell) {
+                          cell = score;
+                        } else {
+                          cell += score;
+                        }
+                        this.quadtree.set(quadkey, cell);
+                      }
+                    }
+                  } else if (
+                    item.type === "way" &&
+                    item.refs.length >= 2 &&
+                    (item.tags.building ||
+                    item.tags.amenity ||
+                    item.tags.highway === "residential")
+                  ) {
+                    // way
                     var score = Object.keys(item.tags).length;
-                    var geom = turf.point(this.nodes.get(item.id)).geometry;
+                    // residential roads included, but given reduced weight
+                    if (item.tags.highway) score = score * 0.1;
+                    var geom = turf.lineString(
+                      item.refs.map(ref => {
+                        return this.nodes.get(ref);
+                      })
+                    ).geometry;
                     var quadkeys = cover.indexes(geom, Z);
                     for (let quadkey of quadkeys) {
                       var cell = this.quadtree.get(quadkey);
@@ -72,52 +146,26 @@ Simulation.prototype.setup = async function() {
                       this.quadtree.set(quadkey, cell);
                     }
                   }
-                } else if (
-                  item.type === "way" &&
-                  item.refs.length >= 2 &&
-                  (item.tags.building ||
-                    item.tags.amenity ||
-                    item.tags.highway === "residential")
-                ) {
-                  // way
-                  var score = Object.keys(item.tags).length;
-                  // residential roads included, but given reduced weight
-                  if (item.tags.highway) score = score * 0.1;
-                  var geom = turf.lineString(
-                    item.refs.map(ref => {
-                      return this.nodes.get(ref);
-                    })
-                  ).geometry;
-                  var quadkeys = cover.indexes(geom, Z);
-                  for (let quadkey of quadkeys) {
-                    var cell = this.quadtree.get(quadkey);
-                    if (!cell) {
-                      cell = score;
-                    } else {
-                      cell += score;
-                    }
-                    this.quadtree.set(quadkey, cell);
-                  }
-                }
+                });
+                next();
+              })
+            )
+            .on("finish", () => {
+              // rank quadkeys
+              this.quadtree.forEach((value, key) => {
+                this.quadranks.push(key);
               });
-              next();
-            })
-          )
-          .on("finish", () => {
-            // rank quadkeys
-            this.quadtree.forEach((value, key) => {
-              this.quadranks.push(key);
-            });
-            this.quadranks.sort((a, b) => {
-              return this.quadtree.get(a) - this.quadtree.get(b);
-            });
-            this.quadranks.forEach(q => {
-              this.quadscores.push(this.quadtree.get(q));
-            });
+              this.quadranks.sort((a, b) => {
+                return this.quadtree.get(a) - this.quadtree.get(b);
+              });
+              this.quadranks.forEach(q => {
+                this.quadscores.push(this.quadtree.get(q));
+              });
 
-            resolve();
-          });
-      });
+              resolve();
+            });
+        });
+    }
   });
 };
 
