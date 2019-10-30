@@ -21,6 +21,7 @@
     "osm-pbf-parser": "^2.3.0",
     "osrm": "^5.22.0",
     "random": "^2.0.13",
+    "s2-geometry": "^1.2.10",
     "through2": "^3.0.1"
   },
   "devDependencies": {
